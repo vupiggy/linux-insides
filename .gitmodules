@@ -1,0 +1,3 @@
+[submodule "Scripts/pandoctools"]
+	path = Scripts/pandoctools
+	url = https://github.com/vupiggy/pandoctools
