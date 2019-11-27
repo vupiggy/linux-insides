@@ -8,7 +8,7 @@ which make >/dev/null 2>&1 || {
 rootdir=$(realpath ${0%%/*}/..)
 pandoctools=$rootdir/Scripts/pandoctools
 
-for chapter in Dummy Booting
+for chapter in Booting
 do
     [ -d $rootdir/$chapter ] || {
         echo "$rootdir/$chapter doesn't exist, build next"

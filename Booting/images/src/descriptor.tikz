@@ -1,0 +1,70 @@
+\begin{tikzpicture}[%
+  every node/.style = {
+    minimum height = 1.5cm,
+    font=\ttfamily,
+    draw, fill = lightgray,
+    inner sep = 0pt, outer sep = 0pt,
+  },
+  number/.style = {
+    draw = none, fill = none,
+    minimum height = 0.5cm
+  },
+  bit/.style = {
+    draw = none, fill = none,
+    minimum width = 0.5cm, minimum height = 0.5cm
+  }
+]
+  \input{colordef.tex}
+  \node (BASE3124) [minimum width = 4cm]
+        {BASE 31:24};
+  \node [number, above right = 0.05cm and 0cm of BASE3124.north west] {63};
+  \node [number, above left = 0.05cm and 0cm of BASE3124.north east] {56};
+
+  \node (G)        [minimum width = 0.5cm, right = 0cm of BASE3124.east]
+        {G};
+  \node (BD)       [minimum width = 0.5cm, text width = 0.25cm, right = 0cm of G.east]
+        {B\\/\\D};
+  \node (L)        [minimum width = 0.5cm, right = 0cm of BD.east]
+        {L};
+  \node (AVL)      [minimum width = 0.5cm, text width = 0.25cm, right = 0cm of L.east]
+        {A\\V\\L};
+  \node (LIMIT1916)[minimum width = 2cm, text width = 1cm, right = 0cm of AVL.east]
+        {LIMIT\\19:16};
+  \node [number, above right = 0.05cm and 0cm of LIMIT1916.north west] {51};
+  \node [number, above left = 0.05cm and 0cm of LIMIT1916.north east] {48};
+
+  \node (P)        [minimum width = 0.5cm, right = 0cm of LIMIT1916.east] {P};
+  \node (DPL)      [minimum width = 1.0cm, right = 0cm of P.east] {DPL};
+  \node [number, above left = 0.05cm and 0cm of DPL.north east] {45};
+
+  \node (S)        [minimum width = 0.5cm, right = 0cm of DPL.east]
+        {S};
+  \node (TYPE)     [minimum width = 2.0cm, right = 0cm of S.east]
+        {TYPE};
+  \node (B1) [bit, below right = 0cm and 0cm of TYPE.north west] {0};
+  \node (B2) [bit, below right = 0cm and 0.5cm of TYPE.north west] {E};
+  \node (B3) [bit, below right = 0cm and 1cm of TYPE.north west] {W};
+  \node (B4) [bit, below right = 0cm and 1.5cm of TYPE.north west] {A};
+  \draw (B1.north east) -- (B1.south east);
+  \draw (B2.north east) -- (B2.south east);
+  \draw (B3.north east) -- (B3.south east);
+  \node (B4) [bit, above right = 0cm and 0cm of TYPE.south west] {1};
+  \node (B5) [bit, above right = 0cm and 0.5cm of TYPE.south west] {C};
+  \node (B6) [bit, above right = 0cm and 1cm of TYPE.south west] {R};
+  \node (B7) [bit, above right = 0cm and 1.5cm of TYPE.south west] {A};
+  \draw (B4.north east) -- (B4.south east);
+  \draw (B5.north east) -- (B5.south east);
+  \draw (B6.north east) -- (B6.south east);
+
+  \node (BASE2316) [minimum width = 4cm, right = 0cm of TYPE.east]
+        {BASE 23:16};
+  \node [number, above right = 0.05cm and 0cm of BASE2316.north west] {39};
+  \node [number, above left = 0.05cm and 0cm of BASE2316.north east] {32};
+
+  \node (BASE150) [minimum width = 8cm, below right = 0cm and 0cm of BASE3124.south west] {BASE 15:0};
+  \node [number, below right = 0.05cm and 0cm of BASE150.south west] {31};
+  \node [number, below left = 0.05cm and 0cm of BASE150.south east] {16};
+  \node (LIMIT150) [minimum width = 8cm, right = 0cm of BASE150.east] {LIMIT 15:0};
+  % \node [number, below right = 0.05cm and 0cm of LIMIT150.south west] {15};
+  \node [number, below left = 0.05cm and 0cm of LIMIT150.south east] {0};
+\end{tikzpicture}

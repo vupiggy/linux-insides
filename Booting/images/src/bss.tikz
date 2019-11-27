@@ -1,0 +1,21 @@
+\begin{tikzpicture}[%
+  > = latex,
+  stack/.style = {
+    rectangle, draw = kubeblue, fill = tiblue, text = white, font=\large\sffamily,
+    text width = 8cm, align = center,
+    minimum width = 8cm, minimum height = 1.5cm,
+    inner sep = 0pt, outer sep = 0pt
+}]
+  \input{colordef.tex}
+  \node (stack) [stack] {Stack};
+  \node (kernel) [stack, below = 0cm and 0cm of stack] {BSS section\\Kernel legacy boot sector ({\tt 4d 5a})};
+  \draw [<-] ($(stack.north east)$)  --
+    node[text width=4cm, above right, very near start, yshift=0.1cm, inner sep = 0pt] {\tt \_end}
+    ($(3.5cm, 0cm) + (stack.north east)$);
+  \draw [<-] ($(kernel.north east)$) -- 
+    node[text width=4cm, above right, very near start, yshift=0.1cm, inner sep = 0pt] {\tt \_\_bss\_start}
+    ($(3.5cm, 0cm) + (kernel.north east)$);
+  \draw [<-] ($(kernel.south east)$) -- 
+    node[text width=4cm, above right, very near start, yshift=0.1cm, inner sep = 0pt] {\tt \%ss - 0x1000} 
+    ($(3.5cm, 0cm) + (kernel.south east)$);
+\end{tikzpicture}

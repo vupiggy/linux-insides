@@ -7,6 +7,7 @@ First steps in the kernel setup
 We started to dive into the linux kernel's insides in the previous [part](linux-bootstrap-1.md) and saw the initial part of the kernel setup code. We stopped at the first call to the `main` function (which is the first function written in C) from [arch/x86/boot/main.c](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c).
 
 In this part, we will continue to research the kernel setup code and go over
+
 * what `protected mode` is,
 * the transition into it,
 * the initialization of the heap and the console,
@@ -57,88 +58,86 @@ where the `lgdt` instruction loads the base address and limit(size) of the globa
  * the size(16-bit) of the global descriptor table;
  * the address(32-bit) of the global descriptor table.
 
-As mentioned above, the GDT contains `segment descriptors` which describe memory segments.  Each descriptor is 64-bits in size. The general scheme of a descriptor is:
+As mentioned above, the GDT contains `segment descriptors` which describe memory segments.  Each descriptor is 64-bits in size. The general scheme of a descriptor looks like @fig:descriptor.
 
-```
- 63         56         51   48    45           39        32 
-------------------------------------------------------------
-|             | |B| |A|       | |   | |0|E|W|A|            |
-| BASE 31:24  |G|/|L|V| LIMIT |P|DPL|S|  TYPE | BASE 23:16 |
-|             | |D| |L| 19:16 | |   | |1|C|R|A|            |
-------------------------------------------------------------
-
- 31                         16 15                         0 
-------------------------------------------------------------
-|                             |                            |
-|        BASE 15:0            |       LIMIT 15:0           |
-|                             |                            |
-------------------------------------------------------------
+```{.figure}
+{
+    "path"    : "images/descriptor",
+    "caption" : "Descriptor",
+    "label"   : "descriptor",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "ht"
+}
 ```
 
 Don't worry, I know it looks a little scary after Real mode, but it's easy. For example LIMIT 15:0 means that bits 0-15 of the segment limit are located at the beginning of the Descriptor. The rest of it is in LIMIT 19:16, which is located at bits 48-51 of the Descriptor. So, the size of Limit is 0-19 i.e 20-bits. Let's take a closer look at it:
 
-1. Limit[20-bits] is split between bits 0-15 and 48-51. It defines the `length_of_segment - 1`. It depends on the `G`(Granularity) bit.
+#. Limit[20-bits] is split between bits 0-15 and 48-51. It defines the `length_of_segment - 1`. It depends on the `G`(Granularity) bit.
 
-  * if `G` (bit 55) is 0 and the segment limit is 0, the size of the segment is 1 Byte
-  * if `G` is 1 and the segment limit is 0, the size of the segment is 4096 Bytes
-  * if `G` is 0 and the segment limit is 0xfffff, the size of the segment is 1 Megabyte
-  * if `G` is 1 and the segment limit is 0xfffff, the size of the segment is 4 Gigabytes
+    * if `G` (bit 55) is 0 and the segment limit is 0, the size of the segment is 1 Byte
+    * if `G` is 1 and the segment limit is 0, the size of the segment is 4096 Bytes
+    * if `G` is 0 and the segment limit is 0xfffff, the size of the segment is 1 Megabyte
+    * if `G` is 1 and the segment limit is 0xfffff, the size of the segment is 4 Gigabytes
 
-  So, what this means is
-  * if G is 0, Limit is interpreted in terms of 1 Byte and the maximum size of the segment can be 1 Megabyte.
-  * if G is 1, Limit is interpreted in terms of 4096 Bytes = 4 KBytes = 1 Page and the maximum size of the segment can be 4 Gigabytes. Actually, when G is 1, the value of Limit is shifted to the left by 12 bits. So, 20 bits + 12 bits = 32 bits and 2<sup>32</sup> = 4 Gigabytes.
+    So, what this means is
 
-2. Base[32-bits] is split between bits 16-31, 32-39 and 56-63. It defines the physical address of the segment's starting location.
+    * if G is 0, Limit is interpreted in terms of 1 Byte and the maximum size of the segment can be 1 Megabyte.
+    * if G is 1, Limit is interpreted in terms of 4096 Bytes = 4 KBytes = 1 Page and the maximum size of the segment can      be 4 Gigabytes. Actually, when G is 1, the value of Limit is shifted to the left by 12 bits. So,
+      20 bits + 12 bits = 32 bits and 2<sup>32</sup> = 4 Gigabytes.
 
-3. Type/Attribute[5-bits] is represented by bits 40-44. It defines the type of segment and how it can be accessed.
-  * The `S` flag at bit 44 specifies the descriptor type. If `S` is 0 then this segment is a system segment, whereas if `S` is 1 then this is a code or data segment (Stack segments are data segments which must be read/write segments).
+#. Base[32-bits] is split between bits 16-31, 32-39 and 56-63. It defines the physical address of the segment's starting location.
 
-To determine if the segment is a code or data segment, we can check its Ex(bit 43) Attribute (marked as 0 in the above diagram). If it is 0, then the segment is a Data segment, otherwise, it is a code segment.
+#. Type/Attribute[5-bits] is represented by bits 40-44. It defines the type of segment and how it can be accessed.
+   The `S` flag at bit 44 specifies the descriptor type.
+   If `S` is 0 then this segment is a system segment,
+   whereas if `S` is 1 then this is a code or data segment
+   (Stack segments are data segments which must be read/write segments).
 
-A segment can be of one of the following types:
+    To determine if the segment is a code or data segment, we can check its Ex(bit 43) Attribute (marked as 0 in the above diagram). If it is 0, then the segment is a Data segment, otherwise, it is a code segment.
 
-```
---------------------------------------------------------------------------------------
-|           Type Field        | Descriptor Type | Description                        |
-|-----------------------------|-----------------|------------------------------------|
-| Decimal                     |                 |                                    |
-|             0    E    W   A |                 |                                    |
-| 0           0    0    0   0 | Data            | Read-Only                          |
-| 1           0    0    0   1 | Data            | Read-Only, accessed                |
-| 2           0    0    1   0 | Data            | Read/Write                         |
-| 3           0    0    1   1 | Data            | Read/Write, accessed               |
-| 4           0    1    0   0 | Data            | Read-Only, expand-down             |
-| 5           0    1    0   1 | Data            | Read-Only, expand-down, accessed   |
-| 6           0    1    1   0 | Data            | Read/Write, expand-down            |
-| 7           0    1    1   1 | Data            | Read/Write, expand-down, accessed  |
-|                  C    R   A |                 |                                    |
-| 8           1    0    0   0 | Code            | Execute-Only                       |
-| 9           1    0    0   1 | Code            | Execute-Only, accessed             |
-| 10          1    0    1   0 | Code            | Execute/Read                       |
-| 11          1    0    1   1 | Code            | Execute/Read, accessed             |
-| 12          1    1    0   0 | Code            | Execute-Only, conforming           |
-| 14          1    1    0   1 | Code            | Execute-Only, conforming, accessed |
-| 13          1    1    1   0 | Code            | Execute/Read, conforming           |
-| 15          1    1    1   1 | Code            | Execute/Read, conforming, accessed |
---------------------------------------------------------------------------------------
-```
+    A segment can be of one of the following types, see @tbl:segtypes
 
-As we can see the first bit(bit 43) is `0` for a _data_ segment and `1` for a _code_ segment. The next three bits (40, 41, 42) are either `EWA`(*E*xpansion *W*ritable *A*ccessible) or CRA(*C*onforming *R*eadable *A*ccessible).
-  * if E(bit 42) is 0, expand up, otherwise, expand down. Read more [here](http://www.sudleyplace.com/dpmione/expanddown.html).
-  * if W(bit 41)(for Data Segments) is 1, write access is allowed, and if it is 0, the segment is read-only. Note that read access is always allowed on data segments.
-  * A(bit 40) controls whether the segment can be accessed by the processor or not.
-  * C(bit 43) is the conforming bit(for code selectors). If C is 1, the segment code can be executed from a lower level privilege (e.g. user) level. If C is 0, it can only be executed from the same privilege level.
-  * R(bit 41) controls read access to code segments; when it is 1, the segment can be read from. Write access is never granted for code segments.
+    |          Type Field                  | Descriptor Type | Description                        |
+    |:-------------------------------------|:----------------|:-----------------------------------|
+    | `Decimal`                            |                 |                                    |
+    | `.          0    E    W    A`        |                 |                                    |
+    | `0          0    0    0    0`        | Data            | RO                                 |
+    | `1          0    0    0    1`        | Data            | RO, accessed                       |
+    | `2          0    0    1    0`        | Data            | RW                                 |
+    | `3          0    0    1    1`        | Data            | RW, accessed                       |
+    | `4          0    1    0    0`        | Data            | RO, expand-down                    |
+    | `5          0    1    0    1`        | Data            | RO, expand-down, accessed          |
+    | `6          0    1    1    0`        | Data            | RW, expand-down                    |
+    | `7          0    1    1    1`        | Data            | RW, expand-down, accessed          |
+    | `.               C    R    A`        |                 |                                    |
+    | `8          1    0    0    0`        | Code            | ExO                                |
+    | `9          1    0    0    1`        | Code            | ExO, accessed                      |
+    | `10         1    0    1    0`        | Code            | Ex/R                               |
+    | `11         1    0    1    1`        | Code            | Ex/R, accessed                     |
+    | `12         1    1    0    0`        | Code            | ExO, conforming                    |
+    | `13         1    1    0    1`        | Code            | ExO, conforming, accessed          |
+    | `14         1    1    1    0`        | Code            | Ex/R, conforming                   |
+    | `15         1    1    1    1`        | Code            | Ex/R, conforming, accessed         |
 
-4. DPL[2-bits] (Descriptor Privilege Level) comprises the bits 45-46. It defines the privilege level of the segment. It can be 0-3 where 0 is the most privileged level.
+    : Segment types {#tbl:segtypes}
 
-5. The P flag(bit 47) indicates if the segment is present in memory or not. If P is 0, the segment will be presented as _invalid_ and the processor will refuse to read from this segment.
+    As we can see the first bit(bit 43) is `0` for a _data_ segment and `1` for a _code_ segment. The next three bits (40, 41, 42) are either `EWA`(*E*xpansion *W*ritable *A*ccessible) or CRA(*C*onforming *R*eadable *A*ccessible).
 
-6. AVL flag(bit 52) - Available and reserved bits. It is ignored in Linux.
+    * if E(bit 42) is 0, expand up, otherwise, expand down. Read more [here](http://www.sudleyplace.com/dpmione/expanddown.html).
+    * if W(bit 41)(for Data Segments) is 1, write access is allowed, and if it is 0, the segment is read-only. Note that read access is always allowed on data segments.
+    * A(bit 40) controls whether the segment can be accessed by the processor or not.
+    * C(bit 43) is the conforming bit(for code selectors). If C is 1, the segment code can be executed from a lower level privilege (e.g. user) level. If C is 0, it can only be executed from the same privilege level.
+    * R(bit 41) controls read access to code segments; when it is 1, the segment can be read from. Write access is never granted for code segments.
 
-7. The L flag(bit 53) indicates whether a code segment contains native 64-bit code. If it is set, then the code segment executes in 64-bit mode.
+#. DPL[2-bits] (Descriptor Privilege Level) comprises the bits 45-46. It defines the privilege level of the segment. It can be 0-3 where 0 is the most privileged level.
 
-8. The D/B flag(bit 54)  (Default/Big flag) represents the operand size i.e 16/32 bits. If set, operand size is 32 bits. Otherwise, it is 16 bits.
+#. The P flag(bit 47) indicates if the segment is present in memory or not. If P is 0, the segment will be presented as _invalid_ and the processor will refuse to read from this segment.
+
+#. AVL flag(bit 52) - Available and reserved bits. It is ignored in Linux.
+
+#. The L flag(bit 53) indicates whether a code segment contains native 64-bit code. If it is set, then the code segment executes in 64-bit mode.
+
+#. The D/B flag(bit 54)  (Default/Big flag) represents the operand size i.e 16/32 bits. If set, operand size is 32 bits. Otherwise, it is 16 bits.
 
 Segment registers contain segment selectors as in real mode. However, in protected mode, a segment selector is handled differently. Each Segment Descriptor has an associated Segment Selector which is a 16-bit structure:
 
@@ -150,11 +149,13 @@ Segment registers contain segment selectors as in real mode. However, in protect
 ```
 
 Where,
+
 * **Index** stores the index number of the descriptor in the GDT.
 * **TI**(Table Indicator) indicates where to search for the descriptor. If it is 0 then the descriptor is searched for in the Global Descriptor Table(GDT). Otherwise, it will be searched for in the Local Descriptor Table(LDT).
 * And **RPL** contains the Requester's Privilege Level.
 
 Every segment register has a visible and a hidden part.
+
 * Visible - The Segment Selector is stored here.
 * Hidden -  The Segment Descriptor (which contains the base, limit, attributes & flags) is stored here.
 
@@ -164,9 +165,17 @@ The following steps are needed to get a physical address in protected mode:
 * The CPU tries to find a segment descriptor at the offset `GDT address + Index` from the selector and then loads the descriptor into the *hidden* part of the segment register.
 * If paging is disabled, the linear address of the segment, or its physical address, is given by the formula: Base address (found in the descriptor obtained in the previous step) + Offset.
 
-Schematically it will look like this:
+Schematically it will look like @fig:laddr
 
-![linear address](images/linear_address.png){width=395.4px height=327.6px}
+```{.figure}
+{
+    "path"    : "images/laddr",
+    "caption" : "Translating to linear address",
+    "label"   : "laddr",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "ht"
+}
+```
 
 The algorithm for the transition from real mode into protected mode is:
 
@@ -219,6 +228,7 @@ memcpy(&boot_params.hdr, &hdr, sizeof hdr);
 ```
 
 So,
+
 * `ax` will contain the address of `boot_params.hdr`
 * `dx` will contain the address of `hdr`
 * `cx` will contain the size of `hdr` in bytes.

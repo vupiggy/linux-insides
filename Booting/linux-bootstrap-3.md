@@ -42,42 +42,51 @@ vga=<mode>
 
 So we can add the `vga` option to the grub (or another bootloader's) configuration file and it will pass this option to the kernel command line. This option can have different values as mentioned in the description. For example, it can be an integer number `0xFFFD` or `ask`. If you pass `ask` to `vga`, you will see a menu like this:
 
-![video mode setup menu](images/video_mode_setup_menu.png)
+![video mode setup menu](images/video_mode_setup_menu.png){#fig:videdomode ratio=1.1}
 
 which will ask to select a video mode. We will look at its implementation, but before diving into the implementation we have to look at some other things.
 
 Kernel data types
 --------------------------------------------------------------------------------
 
-Earlier we saw definitions of different data types like `u16` etc. in the kernel setup code. Let's look at a couple of data types provided by the kernel:
+Earlier we saw definitions of different data types like `u16` etc. in the kernel setup code.
+Let's look at a couple of data types provided by the kernel in @tbl:datatype
 
+: Data types provided by the kernel {#tbl:datatype}
 
-| Type | char | short | int | long | u8 | u16 | u32 | u64 |
-|------|------|-------|-----|------|----|-----|-----|-----|
-| Size |  1   |   2   |  4  |   8  |  1 |  2  |  4  |  8  |
+|  Type |  char |  short |  int |  long |  u8 |  u16 |  u32 |  u64 |
+|:------|:------|:-------|:-----|:------|:----|:-----|:-----|:-----|
+|  Size |   1   |    2   |   4  |   8   |   1 |   2  |   4  |   8  |
 
-If you read the source code of the kernel, you'll see these very often and so it will be good to remember them.
+If you read the source code of the kernel,
+you'll see these very often and so it will be good to remember them.
 
 Heap API
 --------------------------------------------------------------------------------
 
-After we get `vid_mode` from `boot_params.hdr` in the `set_video` function, we can see the call to the `RESET_HEAP` function. `RESET_HEAP` is a macro which is defined in [arch/x86/boot/boot.h](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/boot.h) header file.
-
+After we get `vid_mode` from `boot_params.hdr` in the `set_video` function,
+we can see the call to the `RESET_HEAP` function.
+`RESET_HEAP` is a macro which is defined in
+[arch/x86/boot/boot.h](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/boot.h) header file.
 This macro is defined as:
 
 ```C
 #define RESET_HEAP() ((void *)( HEAP = _end ))
 ```
 
-If you have read the second part, you will remember that we initialized the heap with the [`init_heap`](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c) function. We have a couple of utility macros and functions for managing the heap which are defined in `arch/x86/boot/boot.h` header file.
-
+If you have read the second part,
+you will remember that we initialized the heap with
+the [`init_heap`](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/main.c) function.
+We have a couple of utility macros and functions for managing the heap
+which are defined in `arch/x86/boot/boot.h` header file.
 They are:
 
 ```C
 #define RESET_HEAP()
 ```
 
-As we saw just above, it resets the heap by setting the `HEAP` variable to `_end`, where `_end` is just `extern char _end[];`
+As we saw just above,
+it resets the heap by setting the `HEAP` variable to `_end`, where `_end` is just `extern char _end[];`
 
 Next is the `GET_HEAP` macro:
 
@@ -89,7 +98,9 @@ Next is the `GET_HEAP` macro:
 for heap allocation. It calls the internal function `__get_heap` with 3 parameters:
 
 * the size of the datatype to be allocated for
+
 * `__alignof__(type)` specifies how variables of this type are to be aligned
+
 * `n` specifies how many items to allocate
 
 The implementation of `__get_heap` is:

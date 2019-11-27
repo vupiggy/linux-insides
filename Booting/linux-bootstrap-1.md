@@ -1,3 +1,10 @@
+---
+title: Booting
+latexTextWidth: 360
+figPrefix: Figure
+tblPrefix: Table
+---
+
 Kernel booting process. Part 1.
 ================================================================================
 
@@ -138,7 +145,7 @@ This will instruct [QEMU](https://www.qemu.org/) to use the `boot` binary that w
 
 You will see:
 
-![Simple bootloader which prints only `!`](images/simple_bootloader.png){width=573.6px height=336px}
+![Simple bootloader which prints only `!`](images/simple_bootloader.png){#fig:simplebl ratio=1.2}
 
 In this example, we can see that the code will be executed in `16-bit` real mode and will start at `0x7c00` in memory. After starting, it calls the [0x10](http://www.ctyme.com/intr/rb-0106.htm) interrupt, which just prints the `!` symbol. It fills the remaining `510` bytes with zeros and finishes with the two magic bytes `0xaa` and `0x55`.
 
@@ -250,7 +257,7 @@ X + sizeof(KernelBootSector) + 1
 
 where `X` is the address of the kernel boot sector being loaded. In my case, `X` is `0x10000`, as we can see in a memory dump:
 
-![kernel first address](images/kernel_first_address.png)
+![kernel first address](images/kernel_first_address.png){#firstaddr ratio=1.2}
 
 The bootloader has now loaded the Linux kernel into memory, filled the header fields, and then jumped to the corresponding memory address. We now move directly to the kernel setup code.
 
@@ -267,7 +274,7 @@ qemu-system-x86_64 vmlinuz-3.18-generic
 
 then you will see:
 
-![Try vmlinuz in qemu](images/try_vmlinuz_in_qemu.png)
+![Try vmlinuz in qemu](images/try_vmlinuz_in_qemu.png){#fig:vmlinuz ratio=1.1}
 
 Actually, the file `header.S` starts with the magic number [MZ](https://en.wikipedia.org/wiki/DOS_MZ_executable) (see image above), the error message that displays and, following that, the [PE](https://en.wikipedia.org/wiki/Portable_Executable) header:
 
@@ -345,7 +352,7 @@ After the jump to `start_of_setup`, the kernel needs to do the following:
 
 Let's look at the implementation.
 
-Aligning the Segment Registers 
+Aligning the Segment Registers
 --------------------------------------------------------------------------------
 
 First of all, the kernel ensures that the `ds` and `es` segment registers point to the same address. Next, it clears the direction flag using the `cld` instruction:
@@ -405,9 +412,17 @@ Let's look at all three of these scenarios in turn:
     sti
 ```
 
-Here we set the alignment of `dx` (which contains the value of `sp` as given by the bootloader) to `4` bytes and check if it is zero. If it is, we set `dx` to `0xfffc` (The last 4-byte aligned address in a 64KB segment). If it is not zero, we continue to use the value of `sp` given by the bootloader (`0xf7f4` in my case). Afterwards, we put the value of `ax` (`0x1000`) into `ss`. We now have a correct stack:
+Here we set the alignment of `dx` (which contains the value of `sp` as given by the bootloader) to `4` bytes and check if it is zero. If it is, we set `dx` to `0xfffc` (The last 4-byte aligned address in a 64KB segment). If it is not zero, we continue to use the value of `sp` given by the bootloader (`0xf7f4` in my case). Afterwards, we put the value of `ax` (`0x1000`) into `ss`. We now have a correct stack. See @fig:stack1
 
-![stack](images/stack1.png){width=399px height=236px}
+```{.figure}
+{
+    "path"    : "images/stack1",
+    "caption" : "The first scenario, {\\tt ss} is {\\tt 0x1000}",
+    "label"   : "stack1",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "ht"
+}
+```
 
 * The second scenario, (`ss` != `ds`). First, we put the value of [_end](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) (the address of the end of the setup code) into `dx` and check the `loadflags` header field using the `testb` instruction to see whether we can use the heap. [loadflags](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/header.S#L320) is a bitmask header defined as:
 
@@ -431,13 +446,29 @@ Field name: loadflags
     functionality will be disabled.
 ```
 
-If the `CAN_USE_HEAP` bit is set, we put `heap_end_ptr` into `dx` (which points to `_end`) and add `STACK_SIZE` (the minimum stack size, `1024` bytes) to it. After this, if `dx` is not carried (it will not be carried, `dx = _end + 1024`), jump to label `2` (as in the previous case) and make a correct stack.
+If the `CAN_USE_HEAP` bit is set, we put `heap_end_ptr` into `dx` (which points to `_end`) and add `STACK_SIZE` (the minimum stack size, `1024` bytes) to it. After this, if `dx` is not carried (it will not be carried, `dx = _end + 1024`), jump to label `2` (as in the previous case) and make a correct stack. See @fig:stack2
 
-![stack](images/stack2.png){width=473px height=260px}
+```{.figure}
+{
+    "path"    : "images/stack2",
+    "caption" : "The second scenario, {\\tt CAN\\_USE\\_HEAP} set",
+    "label"   : "stack2",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "ht"
+}
+```
 
-* When `CAN_USE_HEAP` is not set, we just use a minimal stack from `_end` to `_end + STACK_SIZE`:
+* When `CAN_USE_HEAP` is not set, we just use a minimal stack from `_end` to `_end + STACK_SIZE`. See @fig:stack3
 
-![minimal stack](images/minimal_stack.png){width=413px height=223px}
+```{.figure}
+{
+    "path"    : "images/stack3",
+    "caption" : "The third scenario, minimal stack",
+    "label"   : "stack3",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "ht"
+}
+```
 
 BSS Setup
 --------------------------------------------------------------------------------
@@ -451,7 +482,18 @@ The last two steps that need to happen before we can jump to the main C code are
 
 This simply compares the [setup_sig](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) with the magic number `0x5a5aaa55`. If they are not equal, a fatal error is reported.
 
-If the magic number matches, knowing we have a set of correct segment registers and a stack, we only need to set up the BSS section before jumping into the C code.
+If the magic number matches, knowing we have a set of correct segment registers and a stack, we only need to set up the lBSS section before jumping into the C code.
+
+
+```{.figure}
+{
+    "path"    : "images/bss",
+    "caption" : "BSS section",
+    "label"   : "bss",
+    "options" : {"width" : "0.8\\textwidth"},
+    "place"   : "hb"
+}
+```
 
 The BSS section is used to store statically allocated, uninitialized data. Linux carefully ensures this area of memory is first zeroed using the following code:
 
@@ -465,8 +507,6 @@ The BSS section is used to store statically allocated, uninitialized data. Linux
 ```
 
 First, the [__bss_start](https://github.com/torvalds/linux/blob/v4.16/arch/x86/boot/setup.ld) address is moved into `di`. Next, the `_end + 3` address (+3 - aligns to 4 bytes) is moved into `cx`. The `eax` register is cleared (using the `xor` instruction), and the bss section size (`cx - di`) is calculated and put into `cx`. Then, `cx` is divided by four (the size of a 'word'), and the `stosl` instruction is used repeatedly, storing the value of `eax` (zero) into the address pointed to by `di`, automatically increasing `di` by four, repeating until `cx` reaches zero. The net effect of this code is that zeros are written through all words in memory from `__bss_start` to `_end`:
-
-![bss](images/bss.png){width=465px height=246px}
 
 Jump to main
 --------------------------------------------------------------------------------
